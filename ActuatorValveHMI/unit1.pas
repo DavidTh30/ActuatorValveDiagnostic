@@ -7,12 +7,12 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Menus, ExtCtrls,
   ComCtrls, StdCtrls, AsyncProcess, TATransformations, TASources, TAGraph,
-  attabs, BCLabel, BGRACustomDrawn, BCImageButton, BCMaterialDesignButton,
-  BCMDButton, BCMDButtonFocus, BCButton, RichMemo, tcp_udpport, ISOTCPDriver,
+  attabs,  BGRACustomDrawn,  BCMaterialDesignButton,
+  BCMDButton,    tcp_udpport, ISOTCPDriver,
   PLCBlock, PLCBlockElement, TagBit, PLCStruct, PLCStructElement, Process,
   windows, hmi_draw_basic_vector_control, HMIEdit, hmi_polyline, HMIRadioButton,
   Tag, TASeries, JwaIpRtrMib, TAChartUtils, WinSock, JwaIpHlpAPI, FileUtil,
-  LCLType, LCLIntf, uEButton;
+  LCLType, LCLIntf, LazUTF8;
 
 function DwmGetWindowAttribute(hwnd: HWND; dwAttribute: DWORD; pvAttribute: PVOID; cbAttribute: DWORD): HRESULT; stdcall; external 'dwmapi.dll';
 
@@ -458,6 +458,7 @@ type
     MenuItem1: TMenuItem;
     MenuItem3: TMenuItem;
     MenuItem4: TMenuItem;
+    MenuItem5: TMenuItem;
     ScrollBox2: TScrollBox;
     SSC: TMenuItem;
     SaveScreenCapture: TMenuItem;
@@ -784,6 +785,7 @@ type
     procedure MenuItem2Click(Sender: TObject);
     procedure MenuItem3Click(Sender: TObject);
     procedure MenuItem4Click(Sender: TObject);
+    procedure MenuItem5Click(Sender: TObject);
     procedure SaveScreenCaptureClick(Sender: TObject);
     procedure SaveToCSVFileClick(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
@@ -1642,6 +1644,14 @@ end;
 procedure TForm1.MenuItem4Click(Sender: TObject);
 begin
   PageControl1.TabIndex:=3;
+end;
+
+procedure TForm1.MenuItem5Click(Sender: TObject);
+begin
+ //Directory_
+  //FileName_
+  //SysUtils.ExecuteProcess(UTF8ToSys('explorer.exe'), '/select,C:\Windows\explorer.exe', []);
+  SysUtils.ExecuteProcess(UTF8ToSys('explorer.exe'), '/select,'+FormatDateTime('MM YYYY',Now), []);
 end;
 
 procedure TForm1.SaveScreenCaptureClick(Sender: TObject);
