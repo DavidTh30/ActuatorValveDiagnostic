@@ -1,0 +1,508 @@
+
+FUNCTION_BLOCK ActuatorValceControl
+
+  VAR_INPUT
+    Tricker : BOOL; //INT := 7 ;
+    PotenActual : INT;
+    ManualUp : BOOL;
+    ManualDown : BOOL;
+  END_VAR
+  VAR_OUTPUT
+    UpDirection : BOOL;
+    DownDirection : BOOL;
+  END_VAR
+  //VAR 
+  //    FX1, FX2, FY1, FY2 : REAL ;
+  //END_VAR
+
+  VAR_TEMP
+    RealTemp01: REAL;
+    IntTemp01: INT;
+    I:INT;
+  END_VAR
+  VAR
+    FullCyc: INT;
+    Start : BOOL;
+    UnderRunning : BOOL;
+    Stop : BOOL;
+    ClearActual : BOOL;
+    SetMin:BOOL;
+    SetMax:BOOL;
+    RunMode : INT;
+    OldRunMode : INT;
+    CycCounter : INT;
+    Up_Dir:BOOL;
+    Down_Dir:BOOL;
+    SwapDelay_Set:INT;
+    UpDelayAct:INT;
+    DownDelayAct:INT;
+    RecordDelay_Set:INT;
+    UpRecordAct:INT;
+    DownRecordAct:INT;
+    IndexUp:INT;
+    IndexDown:INT;
+    ActualTimeUp:INT;
+    ActualTimeDown:INT;
+    AutoMin:INT;
+    AutoMax:INT;
+    CalibrateUp:INT;
+    CalibrateDown:INT;
+    CalibrateLayer:INT;
+    DelayCalibrateSet:INT;
+    Del_Cal_Up_Act:INT;
+    Del_Cal_Down_Act:INT;
+    DelayCalCheckSet:INT; //Cross Check for Calibrate Function
+    DelayCalCheckAct:INT; //Cross Check for Calibrate Function
+    CalibrateError:BOOL;
+    PotenDistance:INT;
+    ManActPosiPercent:REAL;
+    ManualDistanceError:BOOL;
+    ManualLimitLowError:BOOL;
+    ManualLimitHiError:BOOL;
+    CalibrateSuccessfully:BOOL;
+    PotenSlip:INT;
+    PotenDistanceOK:INT;
+    ManualSetpoint:REAL;
+    ManualUpDirection:BOOL;
+    ManualDownDirection:BOOL;
+    ResetFaultManual:BOOL;
+    ManualSetOpposite:BOOL;
+    ManualSetAcceptGap:REAL;
+    ActualUp : ARRAY [1..100] OF INT;
+    ActualDown : ARRAY [1..100] OF INT;
+    TimeUp : ARRAY [1..100] OF INT;
+    TimeDown : ARRAY [1..100] OF INT;
+    DelayResetCalSet:INT;
+    DelayResetCalAct:INT;
+    ErrorCalAcceptance:INT;
+  END_VAR
+
+BEGIN
+  IF FullCyc <= 10 THEN
+     FullCyc:=100; 
+  END_IF;
+  
+  IF SwapDelay_Set < 5 THEN
+     SwapDelay_Set:=5; 
+  END_IF;
+  IF RecordDelay_Set < 5 THEN
+     RecordDelay_Set:=5; 
+  END_IF;
+  
+  IF IndexUp < 1 THEN
+     IndexUp:=1; 
+  END_IF;
+  IF IndexUp > 100 THEN
+     IndexUp:=100; 
+  END_IF;
+  
+  IF IndexDown < 1 THEN
+     IndexDown:=1; 
+  END_IF;
+  IF IndexDown > 100 THEN
+     IndexDown:=100; 
+  END_IF;
+  
+  IF DelayCalibrateSet < 50 THEN
+     DelayCalibrateSet:=50; 
+  END_IF;
+  
+  IF DelayCalCheckSet < 600 THEN //Cross Check for Calibrate Function
+     DelayCalCheckSet:=600; 
+  END_IF;
+  
+  IF ResetFaultManual THEN
+    ResetFaultManual:=false;
+    ManualDistanceError:=false;
+    ManualLimitLowError:=false;
+    ManualLimitHiError:=false;
+  END_IF;
+  
+  IF PotenSlip < 5 THEN
+     PotenSlip:=5; 
+  END_IF;
+  
+  PotenDistanceOK:=PotenSlip*100;
+  
+  PotenDistance:=CalibrateUp-CalibrateDown;
+  
+  IF ABS(PotenDistance)<PotenDistanceOK THEN
+    ManualDistanceError:=true;
+  END_IF;
+
+  IF (PotenActual < CalibrateUp) AND (PotenActual < CalibrateDown) THEN
+    ManualLimitLowError:=true;
+  END_IF;
+  
+  IF (PotenActual > CalibrateUp) AND (PotenActual > CalibrateDown) THEN
+    ManualLimitHiError:=true;
+  END_IF;
+  
+  IF ManualSetpoint > 100.0 THEN
+    ManualSetpoint:=100.0;
+  END_IF;
+  IF ManualSetpoint < 0.0 THEN
+    ManualSetpoint:=0.0;
+  END_IF;
+  
+  IF DelayResetCalSet<500 THEN
+    DelayResetCalSet:=500;
+  END_IF;
+  
+  IF ErrorCalAcceptance<4 THEN
+    ErrorCalAcceptance:=4;
+  END_IF;
+ 
+  IF ManualSetAcceptGap<0.1 THEN
+    ManualSetAcceptGap:=0.3;
+  END_IF;
+ 
+  IF ClearActual THEN
+    FOR I := 1 TO 100 DO //BY 2 DO
+      ActualUp[I] :=0;
+      ActualDown[I] :=0;
+      TimeUp[I]:=0;
+      TimeDown[I]:=0;
+      //EXIT;
+    END_FOR;
+    ClearActual:=false; 
+  END_IF;
+  
+  IF SetMin THEN
+     AutoMin:=Valve01Act; 
+     SetMin:=false;
+  END_IF;
+  IF SetMax THEN
+     AutoMax:=Valve01Act;
+     SetMax:=False; 
+  END_IF;
+  
+  IF AutoMin>Valve01Act THEN
+     AutoMin:=Valve01Act; 
+  END_IF;
+  IF AutoMax<Valve01Act THEN
+     AutoMax:=Valve01Act; 
+  END_IF;
+  
+  IF (RunMode=0)  AND Start THEN //Not select yet
+    Start:=false;
+  END_IF;
+
+  IF (RunMode=1) AND ((RunMode=OldRunMode) OR (OldRunMode=0)) AND Start THEN //Alway Up
+    OldRunMode:=RunMode;
+    Down_Dir:=NOT Start;
+    DownDirection:=Down_Dir;
+    Up_Dir:=Start; 
+    UnderRunning:=Start; 
+  END_IF;
+
+  IF (RunMode=2) AND ((RunMode=OldRunMode) OR (OldRunMode=0)) AND Start THEN //Alway Up
+    OldRunMode:=RunMode;
+    Up_Dir:= NOT Start; 
+    UpDirection:=Up_Dir;
+    Down_Dir:=Start;
+    UnderRunning:=Start; 
+  END_IF;
+ 
+  IF (RunMode=3) AND ((RunMode=OldRunMode) OR (OldRunMode=0)) AND Start THEN //Calibrate function
+    
+    IF CalibrateLayer=0 THEN //Initialize Calibrate function
+      OldRunMode:=RunMode;
+      Del_Cal_Up_Act:=0;
+      Del_Cal_Down_Act:=0;
+      DelayCalCheckAct:=0;
+      CalibrateError:=false;
+      CalibrateSuccessfully:=false;
+      FOR I := 1 TO 100 DO
+        ActualUp[I] :=0;
+        ActualDown[I] :=0;
+        TimeUp[I]:=0;
+       TimeDown[I]:=0;
+      END_FOR;
+    CalibrateUp:=PotenActual;
+    CalibrateDown:=PotenActual;
+    CalibrateLayer:=1;
+    END_IF;
+    
+    IF CalibrateLayer=1 THEN  //Initialize Up Direction
+      IF Tricker AND Del_Cal_Up_Act < DelayCalibrateSet THEN Del_Cal_Up_Act:=Del_Cal_Up_Act+1; END_IF;
+      IF Tricker AND Del_Cal_Up_Act >= DelayCalibrateSet THEN 
+        IF (CalibrateUp = PotenActual) OR (CalibrateUp < PotenActual+ErrorCalAcceptance) AND (CalibrateUp > PotenActual-ErrorCalAcceptance) THEN
+           CalibrateLayer:=2; 
+           DelayCalCheckAct:=0;
+        END_IF;
+      END_IF;
+      IF Tricker AND ((CalibrateUp > PotenActual+ErrorCalAcceptance) OR (CalibrateUp < PotenActual-ErrorCalAcceptance)) THEN
+        Del_Cal_Up_Act:=0; 
+      END_IF;
+      //IF Tricker AND (CalibrateUp <> PotenActual) THEN
+      //  CalibrateUp:=PotenActual;
+      //Del_Cal_Up_Act:=0;
+      //END_IF;  
+      
+      IF (PotenActual < CalibrateUp) AND (PotenActual < CalibrateDown) THEN
+        CalibrateUp:=PotenActual;
+        Del_Cal_Up_Act:=0;
+      END_IF;
+  
+      IF (PotenActual > CalibrateUp) AND (PotenActual > CalibrateDown) THEN
+        CalibrateUp:=PotenActual;
+        Del_Cal_Up_Act:=0;
+      END_IF;
+    
+      IF Tricker AND (DelayCalCheckAct < DelayCalCheckSet) AND (CalibrateLayer=1) THEN DelayCalCheckAct:=DelayCalCheckAct+1; END_IF;
+      IF Tricker AND (DelayCalCheckAct >= DelayCalCheckSet) THEN CalibrateError:=true; END_IF;
+      IF CalibrateError THEN //TimeOut
+        Start:=false;
+        CalibrateLayer:=0;
+        Down_Dir:=false;
+        UnderRunning:=false;  
+      ELSE  
+        Down_Dir:= NOT Start;
+        Up_Dir:= Start;
+        UnderRunning:=Start; 
+      END_IF;
+    END_IF;
+    
+    IF CalibrateLayer=2 THEN  //Initialize Down Direction
+      IF Tricker AND Del_Cal_Down_Act < DelayCalibrateSet THEN Del_Cal_Down_Act:=Del_Cal_Down_Act+1; END_IF;
+      IF Tricker AND Del_Cal_Down_Act >= DelayCalibrateSet THEN 
+        IF (CalibrateDown = PotenActual) OR (CalibrateDown < PotenActual+ErrorCalAcceptance) AND (CalibrateDown > PotenActual-ErrorCalAcceptance) THEN
+           CalibrateLayer:=3; 
+           //Auto reset
+           CalibrateError:=false;
+           ManualDistanceError:=false;
+           ManualLimitLowError:=false;
+           ManualLimitHiError:=false;
+           CalibrateSuccessfully:=false;
+           DelayCalCheckAct:=0;
+           Del_Cal_Up_Act:=0; 
+           Del_Cal_Down_Act:=0; 
+        END_IF;
+      END_IF;
+      IF Tricker AND ((CalibrateDown > PotenActual+ErrorCalAcceptance) OR (CalibrateDown < PotenActual-ErrorCalAcceptance)) THEN
+        Del_Cal_Down_Act:=0; 
+      END_IF;
+      //IF Tricker AND (CalibrateDown <> PotenActual) THEN
+      //  CalibrateDown:=PotenActual;
+      //Del_Cal_Down_Act:=0;
+      //END_IF;
+      IF (PotenActual < CalibrateUp) AND (PotenActual < CalibrateDown) THEN
+        CalibrateDown:=PotenActual;
+        Del_Cal_Down_Act:=0;
+      END_IF;
+  
+      IF (PotenActual > CalibrateUp) AND (PotenActual > CalibrateDown) THEN
+        CalibrateDown:=PotenActual;
+        Del_Cal_Down_Act:=0;
+      END_IF;   
+      IF Tricker AND (DelayCalCheckAct < DelayCalCheckSet) AND (CalibrateLayer=2) THEN DelayCalCheckAct:=DelayCalCheckAct+1; END_IF;
+      IF Tricker AND (DelayCalCheckAct >= DelayCalCheckSet) THEN CalibrateError:=true; END_IF;
+      IF CalibrateError THEN //TimeOut
+        Start:=false;
+        CalibrateLayer:=0;
+        Down_Dir:=false;
+        UnderRunning:=false;  
+      ELSE  
+        Up_Dir:= NOT Start;
+        Down_Dir:= Start;
+        UnderRunning:=Start; 
+      END_IF;
+    END_IF;
+    
+    IF CalibrateLayer=3 THEN  //Recheck Up Direction
+      IF Tricker AND Del_Cal_Up_Act < DelayCalibrateSet THEN Del_Cal_Up_Act:=Del_Cal_Up_Act+1; END_IF;
+      IF Tricker AND Del_Cal_Up_Act >= DelayCalibrateSet THEN 
+        IF (CalibrateUp = PotenActual) OR (CalibrateUp < PotenActual+ErrorCalAcceptance) AND (CalibrateUp > PotenActual-ErrorCalAcceptance) THEN
+           CalibrateLayer:=4; 
+           DelayCalCheckAct:=0;
+        END_IF;
+      END_IF;
+      IF Tricker AND ((CalibrateUp > PotenActual+ErrorCalAcceptance) OR (CalibrateUp < PotenActual-ErrorCalAcceptance)) THEN
+        Del_Cal_Up_Act:=0; 
+      END_IF;
+      IF Tricker AND (DelayCalCheckAct < DelayCalCheckSet) AND (CalibrateLayer=3) THEN DelayCalCheckAct:=DelayCalCheckAct+1; END_IF;
+      IF Tricker AND (DelayCalCheckAct >= DelayCalCheckSet) THEN CalibrateError:=true; END_IF; //Time out
+      IF CalibrateError OR ManualDistanceError OR ManualLimitLowError OR ManualLimitHiError THEN //Any error the stop
+        Start:=false;
+        CalibrateLayer:=0;
+        Down_Dir:=false;
+        UnderRunning:=false; 
+        CalibrateSuccessfully:=false; 
+      ELSE  
+        Down_Dir:= NOT Start;
+        Up_Dir:= Start;
+        UnderRunning:=Start; 
+      END_IF;
+    END_IF;
+    
+    IF CalibrateLayer=4 THEN  //Recheck Down Direction
+      IF Tricker AND Del_Cal_Down_Act < DelayCalibrateSet THEN Del_Cal_Down_Act:=Del_Cal_Down_Act+1; END_IF;
+      IF Tricker AND Del_Cal_Down_Act >= DelayCalibrateSet THEN 
+        IF (CalibrateDown = PotenActual) OR (CalibrateDown < PotenActual+ErrorCalAcceptance) AND (CalibrateDown > PotenActual-ErrorCalAcceptance) THEN
+           CalibrateLayer:=5; 
+           DelayCalCheckAct:=0;
+        END_IF;
+      END_IF;
+      IF Tricker AND ((CalibrateDown > PotenActual+ErrorCalAcceptance) OR (CalibrateDown < PotenActual-ErrorCalAcceptance)) THEN
+        Del_Cal_Down_Act:=0; 
+      END_IF;   
+      IF Tricker AND (DelayCalCheckAct < DelayCalCheckSet) AND (CalibrateLayer=4) THEN DelayCalCheckAct:=DelayCalCheckAct+1; END_IF;
+      IF Tricker AND (DelayCalCheckAct >= DelayCalCheckSet) THEN CalibrateError:=true; END_IF; //Time out
+      IF CalibrateError OR ManualDistanceError OR ManualLimitLowError OR ManualLimitHiError THEN //Any error the stop
+        Start:=false;
+        CalibrateLayer:=0;
+        Down_Dir:=false;
+        UnderRunning:=false; 
+        CalibrateSuccessfully:=false; 
+      ELSE  
+        Up_Dir:= NOT Start;
+        Down_Dir:= Start;
+        UnderRunning:=Start; 
+      END_IF;
+    END_IF;
+    
+    IF CalibrateLayer=5 THEN  //Calibrate Succeed
+      Start:=false;
+      CalibrateLayer:=0;
+      Up_Dir:=false;
+      Down_Dir:=false;
+      UnderRunning:=false;
+      CalibrateError:=false;
+      CalibrateSuccessfully:=true;
+    END_IF;
+  END_IF;
+  
+  IF ManualUpDirection AND ManualDownDirection THEN
+    ManualUpDirection:=false;
+    ManualDownDirection:=false;
+  END_IF;
+  
+  IF (NOT ManualDistanceError) AND (NOT ManualLimitLowError) AND (NOT ManualLimitHiError) THEN
+    ManActPosiPercent:=((((PotenActual-CalibrateDown)+0.0)/(PotenDistance+0.0))+0.0)*100.0;
+    IF RunMode=4 AND (RunMode=OldRunMode) AND Start THEN
+      OldRunMode:=RunMode;
+      IF (ManActPosiPercent > ManualSetpoint+ManualSetAcceptGap) AND (NOT ManualSetOpposite) THEN
+        Up_Dir:=Start; 
+        Down_Dir:=false;
+      END_IF;
+      IF (ManActPosiPercent < ManualSetpoint+ManualSetAcceptGap) AND (NOT ManualSetOpposite) THEN
+        Down_Dir:=Start; 
+        Up_Dir:=false;
+      END_IF;
+      
+      IF (ManActPosiPercent > ManualSetpoint+ManualSetAcceptGap) AND (ManualSetOpposite) THEN
+        Down_Dir:=Start; 
+        Up_Dir:=false; 
+      END_IF;
+      IF (ManActPosiPercent < ManualSetpoint+ManualSetAcceptGap) AND (ManualSetOpposite) THEN
+        Up_Dir:=Start; 
+        Down_Dir:=false;
+      END_IF;
+      
+      IF Up_Dir OR Down_Dir THEN
+        UnderRunning:=true;
+      ELSE
+        UnderRunning:=false;
+      END_IF;
+      
+    END_IF;
+    IF RunMode=4 AND ManualUpDirection AND Start THEN
+      Up_Dir:=Start;
+      Down_Dir:=NOT Start;
+    END_IF;
+    IF RunMode=4 AND ManualDownDirection AND Start THEN
+      Up_Dir:=NOT Start;
+      Down_Dir:=Start;
+    END_IF;
+  END_IF;
+  
+  IF ((RunMode<>OldRunMode) AND (OldRunMode<>0)) AND (UnderRunning OR Start) THEN //Change mode during valve in runnning
+    Stop:=true;
+    //Start:=false; 
+    UnderRunning:=false;
+    OldRunMode:=0;
+    CalibrateLayer:=0;
+  END_IF;
+
+  IF Stop OR (NOT Start) OR (Up_Dir AND Down_Dir) OR (ManualUp AND ManualDown) THEN
+    //Start:=false; 
+    Up_Dir:=false; 
+    UpDirection:=Up_Dir;
+    Down_Dir:=false;
+    DownDirection:=Down_Dir;
+    UnderRunning:=false; 
+    OldRunMode:=RunMode;
+    CalibrateLayer:=0;
+  END_IF;
+  
+  Stop:=false;
+  
+  IF ManualUp AND NOT ManualDown THEN
+    Up_Dir:=true;
+    Down_Dir:=false;
+    Start:=false;
+    OldRunMode:=0;
+  END_IF;
+  
+  IF ManualDown AND NOT ManualUp THEN
+    Down_Dir:=true;
+    Up_Dir:=false;
+    Start:=false;
+    OldRunMode:=0;
+  END_IF;
+
+  IF ManualDown AND ManualUp THEN
+    Start:=false; 
+    RunMode:=0;
+    Up_Dir:=false;
+    Down_Dir:=false;
+END_IF;
+ 
+  IF Up_Dir THEN
+    IF UpDelayAct >= SwapDelay_Set THEN
+      UpDirection:=Up_Dir;
+      IF Tricker AND (UpRecordAct=0) AND( RunMode=3) AND ((CalibrateLayer=2)OR(CalibrateLayer=3)) THEN 
+        ActualUp[IndexUp]:=PotenActual; TimeUp[IndexUp]:=ActualTimeUp; IndexUp:=IndexUp+1; 
+        IF IndexUp<=100 THEN ActualTimeUp:=ActualTimeUp+1; END_IF; 
+      END_IF;
+      IF Tricker AND UpRecordAct < RecordDelay_Set THEN UpRecordAct:=UpRecordAct+1; END_IF;
+      IF Tricker AND UpRecordAct >= RecordDelay_Set THEN UpRecordAct:=0; END_IF;
+    ELSE
+      IF Tricker THEN UpDelayAct:=UpDelayAct+1; END_IF;
+    END_IF;
+  ELSE
+    UpDelayAct:=0;  
+    UpDirection:=Up_Dir;  
+    IndexUp:=1;
+    UpRecordAct:=0;
+    ActualTimeUp:=0;
+  END_IF;
+  
+  IF Down_Dir THEN
+    IF DownDelayAct >= SwapDelay_Set THEN
+      DownDirection:=Down_Dir;
+      IF Tricker AND (DownRecordAct=0) AND( RunMode=3) AND ((CalibrateLayer=2)OR(CalibrateLayer=3)) THEN 
+        ActualDown[IndexDown]:=PotenActual; TimeDown[IndexDown]:=ActualTimeDown; IndexDown:=IndexDown+1; 
+        IF IndexDown<=100 THEN ActualTimeDown:=ActualTimeDown+1; END_IF; 
+      END_IF;
+      IF Tricker AND DownRecordAct < RecordDelay_Set THEN DownRecordAct:=DownRecordAct+1; END_IF;
+      IF Tricker AND DownRecordAct >= RecordDelay_Set THEN DownRecordAct:=0; END_IF;
+    ELSE
+      IF Tricker THEN DownDelayAct:=DownDelayAct+1; END_IF;
+    END_IF;
+  ELSE
+    DownDelayAct:=0;  
+    DownDirection:=Down_Dir;  
+    IndexDown:=1;
+    DownRecordAct:=0;
+    ActualTimeDown:=0;
+  END_IF;
+  
+  IF CalibrateSuccessfully THEN
+    IF DelayResetCalAct >= DelayResetCalSet THEN CalibrateSuccessfully:=false; END_IF;
+    IF Tricker THEN DelayResetCalAct:=DelayResetCalAct+1; END_IF;
+  ELSE
+    DelayResetCalAct:=0;  
+  END_IF;
+END_FUNCTION_BLOCK
